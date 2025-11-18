@@ -1,92 +1,117 @@
 'use client';
 
-import { Canvas } from '@react-three/fiber';
-import { OrbitControls, useGLTF } from '@react-three/drei';
-import { Suspense, useEffect, useState } from 'react';
-import * as THREE from 'three';
-
-function Model({ openAmount }: { openAmount: number }) {
-  const { scene } = useGLTF('/shell.glb');
-  const [topLid, setTopLid] = useState<THREE.Mesh | null>(null);
-
-  useEffect(() => {
-    const parts: THREE.Mesh[] = [];
-    scene.traverse((child: any) => {
-      if (child.isMesh) {
-        child.material = new THREE.MeshStandardMaterial({
-          color: 0xD4AF37,
-          metalness: 0.7,
-          roughness: 0.3,
-          envMapIntensity: 1.5,
-        });
-        parts.push(child);
-      }
-    });
-
-    // Try to find the top lid (first mesh found)
-    if (parts.length > 0 && !topLid) {
-      setTopLid(parts[0]);
-    }
-    console.log('Shell parts found:', parts.length);
-  }, [scene]);
-
-  // Stage 1: Rotate the whole shell (0 to 1)
-  const stage1Progress = Math.min(openAmount, 1);
-  const baseRotation = -Math.PI / 2;
-  const maxRotation = (Math.PI / 3) + (Math.PI / 18); // 70 degrees
-  const flipRotation = baseRotation - (stage1Progress * maxRotation);
-
-  // Stage 2: Open the lid (1 to 2)
-  const stage2Progress = Math.max(0, openAmount - 1);
-
-  useEffect(() => {
-    if (topLid) {
-      topLid.rotation.z = -stage2Progress * Math.PI / 2; // Open up to 90 degrees on Z axis (reversed)
-    }
-  }, [stage2Progress, topLid]);
-
-  scene.rotation.set(flipRotation, 0, 0);
-  scene.position.set(0, 2.6, 0);
-  scene.scale.set(1.3, 1.3, 1.3);
-  return <primitive object={scene} />;
-}
+import Spline from '@splinetool/react-spline';
+import { useEffect, useState } from 'react';
+import { MorphingTextPair } from '@/components/ui/morphing-text-pair';
 
 export default function Home() {
-  const [openAmount, setOpenAmount] = useState(0);
+  const [virtualScroll, setVirtualScroll] = useState(0);
+  const [spline, setSpline] = useState<any>(null);
+  const [zoomProgress, setZoomProgress] = useState(0);
 
   useEffect(() => {
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      setOpenAmount(prev => {
-        const delta = e.deltaY * 0.001;
-        return Math.max(0, Math.min(2, prev + delta)); // Changed max to 2 for two stages
-      });
+      // Update virtual scroll for morphing text
+      setVirtualScroll(prev => Math.max(0, prev + e.deltaY));
     };
 
     window.addEventListener('wheel', handleWheel, { passive: false });
     return () => window.removeEventListener('wheel', handleWheel);
   }, []);
 
+  useEffect(() => {
+    // When virtualScroll > 1000 (halfway through text transition), start zooming
+    if (virtualScroll > 1000) {
+      const zoomStart = 1000;
+      const zoomEnd = 3000;
+      const progress = Math.min((virtualScroll - zoomStart) / (zoomEnd - zoomStart), 1);
+      setZoomProgress(progress);
+    } else {
+      setZoomProgress(0);
+    }
+  }, [virtualScroll]);
+
+
+
+  function onLoad(splineApp: any) {
+    setSpline(splineApp);
+  }
+
   return (
-    <div className="min-h-screen bg-white flex overflow-hidden">
-      <div className="w-1/2 p-8 flex items-center justify-center">
-        <div className="max-w-xl">
-          <h1 className="text-4xl font-bold mb-4">Your Text Content</h1>
-          <p className="text-lg text-gray-700">
-            Add your text content here. This is the left column where you can put any information you want.
-          </p>
+    <div className="min-h-screen bg-white flex flex-col overflow-hidden relative">
+      {/* Background Video */}
+      <video
+        autoPlay
+        loop
+        muted
+        playsInline
+        className="absolute inset-0 w-full h-full object-cover"
+      >
+        <source src="https://cdn.jsdelivr.net/gh/Team-Hologram/trsm/media.mp4" type="video/mp4" />
+      </video>
+
+      {/* Navigation Bar */}
+      <nav className="relative z-20 py-6">
+        <div className="grid grid-cols-16 items-center">
+          <div className="col-span-8 flex items-center gap-8 pl-8 font-secondary">
+            <a href="#" className="text-white hover:opacity-80 transition-opacity">Who We Are</a>
+            <a href="#" className="text-white hover:opacity-80 transition-opacity">What We Do</a>
+            <a href="#" className="text-white hover:opacity-80 transition-opacity">Case Studies</a>
+            <a href="#" className="text-white hover:opacity-80 transition-opacity">Articles</a>
+            <a href="#" className="text-white hover:opacity-80 transition-opacity">Contact Us</a>
+          </div>
+          <div className="col-span-8 flex items-center justify-end gap-2 pr-8 font-secondary">
+            <span className="text-white font-semibold">Studio</span>
+            <div className="w-8 h-8 rounded-full bg-white"></div>
+          </div>
         </div>
-      </div>
-      <div className="w-1/2 flex items-center justify-center">
-        <Canvas camera={{ position: [0, 0, 10], fov: 50 }} style={{ width: '100%', height: '100vh' }}>
-          <ambientLight intensity={0.3} />
-          <directionalLight position={[10, 10, 5]} intensity={1.5} />
-          <pointLight position={[-10, -10, -5]} intensity={0.5} color="#FFD700" />
-          <Suspense fallback={null}>
-            <Model openAmount={openAmount} />
-          </Suspense>
-          <OrbitControls enableZoom={false} />
-        </Canvas>
+      </nav>
+
+      {/* Content */}
+      <div className="relative z-10 grid grid-cols-16 flex-1 overflow-visible">
+        <div className="col-span-8 flex items-center justify-center px-8" style={{ zIndex: zoomProgress > 0.5 ? 5 : 15 }}>
+          <div className="w-full max-w-4xl h-[300px]">
+            <MorphingTextPair
+              textPairs={[
+                {
+                  heading: "We Create.\nThe World Follows.",
+                  subtext: "We are the unseen force behind iconic brands"
+                },
+                {
+                  heading: "Who We Are",
+                  subtext: "Lorem ipsum dolor sit amet consectetur adipiscing elit. Quisque faucibus ex sapien vitae pellentesque sem placerat."
+                }
+              ]}
+              scrollRange={2000}
+              controlledScroll={virtualScroll}
+            />
+          </div>
+        </div>
+        <div
+          className="col-span-8 flex items-center justify-center relative overflow-visible"
+          style={{
+            zIndex: zoomProgress > 0.5 ? 30 : 10
+          }}
+        >
+          <div
+            className="transition-transform duration-300"
+            style={{
+              transform: `scale(${1 + zoomProgress * 5})`,
+              transformOrigin: 'center center',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <Spline
+              scene="https://prod.spline.design/FfZsIQojKGRKHEoN/scene.splinecode"
+              onLoad={onLoad}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
